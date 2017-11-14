@@ -158,7 +158,7 @@ func post() {
 	services := []string{}
 
 	for k := range _localServices {
-		if k == _hostname {
+		if k == _hostname+"."+_masterHost {
 			continue
 		}
 		services = append(services, k)

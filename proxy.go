@@ -12,7 +12,9 @@ import (
 
 var _reverseProxy = httputil.ReverseProxy{
 	Director: func(r *http.Request) {
+		regLock.Lock()
 		upstream, ok := _localServices[r.Host]
+		regLock.Unlock()
 		if !ok {
 			fmt.Println(r.Host)
 			fmt.Println(_localServices)

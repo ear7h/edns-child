@@ -12,6 +12,7 @@ import (
 
 var _reverseProxy = httputil.ReverseProxy{
 	Director: func(r *http.Request) {
+		fmt.Println(r.Host)
 		regLock.Lock()
 		upstream, ok := _localServices[r.Host]
 		regLock.Unlock()
@@ -28,12 +29,10 @@ var _tlsManager = autocert.Manager{
 	Cache: autocert.DirCache("/var/ear7h/edns/certs"),
 	Prompt: autocert.AcceptTOS,
 	HostPolicy: func(_ context.Context, host string) error {
+		fmt.Println(host)
+		host = strings.ToLower(host)
 
-
-		subdomain := host[:len(host) - len(_masterHost) - 1]
-		subdomain = strings.ToLower(subdomain)
-
-		if _, ok := _localServices[subdomain]; !ok {
+		if _, ok := _localServices[host]; !ok {
 			return fmt.Errorf("acme/autocert: host not configured")
 		}
 

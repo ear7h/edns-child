@@ -135,6 +135,7 @@ func clean() {
 	regLock.Lock()
 	defer regLock.Unlock()
 
+	fmt.Println("local: ", _localServices)
 	for k, v := range _localServices {
 		if k == _hostname {
 			continue
@@ -147,6 +148,9 @@ func clean() {
 		}
 		conn.Close()
 	}
+
+	fmt.Println("clean: ", _localServices)
+
 }
 
 func post() {

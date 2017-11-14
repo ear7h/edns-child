@@ -14,7 +14,7 @@ var _reverseProxy = httputil.ReverseProxy{
 	Director: func(r *http.Request) {
 		fmt.Println(r.Host)
 		// isolate the subdomain
-		subdomain := r.Host[:len(r.Host) - len(_masterHost)]
+		subdomain := r.Host[:len(r.Host) - len(_masterHost) - 1]
 		regLock.Lock()
 		upstream, ok := _localServices[subdomain]
 		regLock.Unlock()
@@ -33,7 +33,7 @@ var _tlsManager = autocert.Manager{
 	Prompt: autocert.AcceptTOS,
 	HostPolicy: func(_ context.Context, host string) error {
 		fmt.Println(host)
-		host = host[:len(host) - len(_masterHost)]
+		host = host[:len(host) - len(_masterHost) - 1]
 		host = strings.ToLower(host)
 		fmt.Println(host)
 		fmt.Println(_localServices)

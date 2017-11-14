@@ -98,7 +98,7 @@ func register(r request) (resBody []byte, err error) {
 		}
 	}
 
-	_localServices[r.name] = r.addr
+	_localServices[r.name + "."+_masterHost] = r.addr
 	regLock.Unlock()
 
 	b := Block{

@@ -30,6 +30,7 @@ var _tlsManager = autocert.Manager{
 	Prompt: autocert.AcceptTOS,
 	HostPolicy: func(_ context.Context, host string) error {
 		fmt.Println(host)
+		fmt.Println(_localServices)
 		host = strings.ToLower(host)
 
 		if _, ok := _localServices[host]; !ok {

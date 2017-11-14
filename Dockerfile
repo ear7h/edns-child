@@ -8,7 +8,7 @@ RUN apk update && apk upgrade && \
 WORKDIR /go/src/github.com/ear7h/edns/child
 COPY . .
 
-RUN go get -f ./...
+RUN go get -v ./...
 RUN go build
 
 CMD ["./child"]

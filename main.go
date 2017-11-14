@@ -1,65 +1,208 @@
-/*
-this file is the cli app of the client
- */
 package main
 
 import (
-	"flag"
+	"bytes"
+	"crypto/sha512"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
-	"strconv"
+	"io/ioutil"
+	"net"
+	"net/http"
+	"os"
 	"strings"
-	"github.com/ear7h/edns/client"
+	"sync"
+	"time"
 )
 
-var name string
-var nodeIp string
-var port uint
-var getPort bool
+const (
+	_passwordFile    = "/var/ear7h/edns/password.txt"
+	_masterAdminPort = ":4454"
+	_childAdminPort  = ":4455"
+	_proxyPort       = ":443"
+	_timeout         = (120 / 9) * 10  // timeout in seconds
+)
+
+var _hostname string
+var _masterHost string
+var _password string
+var _portMin = 8080
+var _portMax = 8090 // exclusive
+// subdomain : ip
+var _localServices = map[string]string{}
+var regLock sync.Mutex
 
 func init() {
-	flag.StringVar(&name,"n", "", "name of service")
+	// set the password
+	byt, err := ioutil.ReadFile(_passwordFile)
+	if err != nil {
+		panic(err)
+	}
+	_password = string(byt)
 
-	flag.StringVar(&nodeIp,"l", "127.0.0.1", "ip address of local node")
+	// set the hostname
+	_hostname, err = os.Hostname()
+	if err != nil {
+		panic(err)
+	}
+	_hostname = strings.ToLower(_hostname)
 
-	flag.UintVar(&port,"p", 0, "port for the service")
+	// the domain being served
+	_masterHost = "ear7h.net"
 
-	flag.BoolVar(&getPort, "g", false, "if this flag is set, this program will automatically find a port and write it to stdout")
+	// add the admin server as service for the node
+	_localServices[_hostname+"."+_masterHost] = "127.0.0.1"+ _childAdminPort
 }
 
-func main() {
-	flag.Parse()
+// Block is the standard messaging format between child nodes
+// and the master node
+type Block struct {
+	Hostname  string    `json:"hostname"`
+	Signature string    `json:"signature"`
+	Timestamp time.Time `json:"timestamp"`
+	Services  []string  `json:"services"`
+	ip        string    // filled in by admin server
+}
 
+func signBlock(b *Block) {
+	b.Hostname = _hostname
+	b.Timestamp = time.Now()
 
-	if flag.NArg() == 2 {
-		name = flag.Arg(0)
-		port64, err := strconv.ParseUint(flag.Arg(1), 10, 64)
-		if err != nil {
-			flag.Usage()
+	str := b.Hostname +
+		_password +
+		b.Timestamp.Format(time.RFC3339Nano) +
+		strings.Join(b.Services, "")
+
+	sum := sha512.Sum512([]byte(str))
+	b.Signature = base64.StdEncoding.EncodeToString(sum[:])
+}
+
+type ClientRequest struct{
+	Name string `json:"name"`
+	Port uint `json:"port"`
+}
+
+type request struct {
+	name string
+	addr string
+}
+
+func register(r request) (resBody []byte, err error) {
+	regLock.Lock()
+
+	for k, v := range _localServices {
+		if r.addr == v {
+			err = fmt.Errorf("Address %s in use by %s", v, k)
+			regLock.Unlock()
 			return
 		}
-
-		port = uint(port64)
 	}
 
-	if name == "" {
-		fmt.Println("must specify name")
-		flag.Usage()
+	_localServices[r.name] = r.addr
+	regLock.Unlock()
+
+	b := Block{
+		Services: []string{r.name},
+	}
+
+	signBlock(&b)
+
+	byt, err := json.Marshal(b)
+	if err != nil {
 		return
 	}
 
-	if getPort {
-		l := client.Listen(name, nodeIp)
+	res, err := http.Post("http://"+_masterHost+_masterAdminPort, "text/json", bytes.NewReader(byt))
+	if err != nil {
+		return
+	}
+	resBody, _ = ioutil.ReadAll(res.Body)
+	res.Body.Close()
 
-		addr := l.Addr().String()
-		addr = addr[:strings.LastIndex(addr, ":")]
-		fmt.Println(addr)
-		l.Close()
-	} else {
-		client.Register(name, port, nodeIp)
+	if res.StatusCode != http.StatusOK {
+		err = fmt.Errorf("%d response: %s", res.StatusCode, string(resBody))
+
+		regLock.Lock()
+		delete(_localServices, r.name)
+		regLock.Unlock()
 	}
 
+	return
 
-	fmt.Println("name: ", name)
-	fmt.Println("port: ", port)
-	fmt.Println("getPort: ", getPort)
+}
+
+func clean() {
+	regLock.Lock()
+	defer regLock.Unlock()
+
+	for k, v := range _localServices {
+		if k == _hostname {
+			continue
+		}
+
+		conn, err := net.Dial("tcp", v)
+		if err != nil {
+			delete(_localServices, k)
+			continue
+		}
+		conn.Close()
+	}
+}
+
+func post() {
+	regLock.Lock()
+	services := []string{}
+
+	for k := range _localServices {
+		if k == _hostname {
+			continue
+		}
+		services = append(services, k)
+	}
+
+	regLock.Unlock()
+
+	b := Block{
+		Services: services,
+	}
+
+	signBlock(&b)
+
+	fmt.Println("posting: ", b)
+
+	byt, err := json.Marshal(b)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	_, err = http.Post("http://"+_masterHost+_masterAdminPort, "text/json", bytes.NewReader(byt))
+	if err != nil {
+		fmt.Println(err)
+	}
+}
+
+func main() {
+
+	go func() {
+		for {
+			clean()
+			post()
+			time.Sleep(_timeout * time.Second)
+		}
+	}()
+
+
+	go func() {
+		panic(serveAdmin())
+	}()
+
+	go func() {
+		panic(serveRedirect())
+	}()
+
+	go func() {
+		panic(serveProxy())
+	}()
+
+	<- make(chan struct{}, 1)
 }

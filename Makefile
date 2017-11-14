@@ -1,13 +1,13 @@
 build:
 	docker-compose build
 
-silent:
-	docker-compose build > build.out &
-
 up: build
 	docker-compose up
 
-service: build
+silent:
+	docker-compose build > build.out &
+
+service: silent
 	nohup docker-compose up > log.out &
 
 go:

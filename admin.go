@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"strings"
 )
 
 func serveAdmin() error {
@@ -45,7 +46,12 @@ func makeAdminHandler() http.HandlerFunc {
 				http.Error(w, "port must be > 0", http.StatusBadRequest)
 			}
 
-			localAddr := fmt.Sprintf("127.0.0.1:%d", localRequest.Port)
+			ip := r.RemoteAddr
+			ip = ip[:strings.LastIndex(ip, ":")]
+
+			localAddr := fmt.Sprintf("%s:%d", ip, localRequest.Port)
+
+			fmt.Println(localAddr)
 
 			res, err := register(request{
 				name: localRequest.Name,

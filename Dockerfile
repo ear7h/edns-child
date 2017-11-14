@@ -5,10 +5,10 @@ RUN apk update && apk upgrade && \
 
 
 
-WORKDIR /go/src/github.com/ear7h/edns/slave
+WORKDIR /go/src/github.com/ear7h/edns/child
 COPY . .
 
-RUN go get -v ./...
+RUN go get -f ./...
 RUN go build
 
-CMD ["./slave"]
+CMD ["./child"]

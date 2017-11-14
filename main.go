@@ -51,7 +51,7 @@ func init() {
 	_masterHost = "ear7h.net"
 
 	// add the admin server as service for the node
-	_localServices[_hostname+"."+_masterHost] = "127.0.0.1"+ _childAdminPort
+	_localServices[_hostname] = "127.0.0.1"+ _childAdminPort
 }
 
 // Block is the standard messaging format between child nodes
@@ -98,7 +98,7 @@ func register(r request) (resBody []byte, err error) {
 		}
 	}
 
-	_localServices[r.name + "."+_masterHost] = r.addr
+	_localServices[r.name] = r.addr
 	regLock.Unlock()
 
 	b := Block{
@@ -158,7 +158,7 @@ func post() {
 	services := []string{}
 
 	for k := range _localServices {
-		if k == _hostname+"."+_masterHost {
+		if k == _hostname {
 			continue
 		}
 		services = append(services, k)
